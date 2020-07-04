@@ -1,0 +1,11 @@
+def passes() {
+    def script = load("vars/testRunPipeline.groovy")
+    script.call()
+}
+
+def fails() {
+    def script = load("vars/testPipeline.groovy")
+    script.call()
+}
+
+return this

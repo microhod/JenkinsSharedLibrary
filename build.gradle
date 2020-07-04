@@ -1,0 +1,140 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.junit.platform:junit-platform-gradle-plugin:1.0.0'
+        classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.6.2"
+    }
+}
+
+apply plugin: 'groovy'
+apply plugin: 'maven'
+apply plugin: 'jacoco'
+apply plugin: "org.sonarqube"
+
+jacoco {
+    toolVersion = "0.8.4"
+}
+
+version = "1.0-SNAPSHOT"
+archivesBaseName = "MySharedLib"
+
+sourceCompatibility = 1.9
+targetCompatibility = 1.9
+
+ext.junitVintageVersion  = '5.1.1'
+ext.junitPlatformVersion = '1.1.1'
+
+defaultTasks 'cleanTest', 'compileGroovy', 'test', 'jacocoTestReport'
+
+sourceSets {
+    main {
+        groovy {
+            srcDirs = ['src', 'vars']
+        }
+    }
+
+    test {
+        groovy {
+            srcDirs = ['test']
+        }
+        resources {
+            srcDirs "test/resources"
+        }
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    // For Cloudbees CPS support and Script security support
+    maven { url 'http://repo.jenkins-ci.org/releases/' }
+}
+
+dependencies {
+
+    // ============================================================
+    // Third-party compile time dependencies
+    // ============================================================
+    compile 'org.codehaus.groovy:groovy-all:2.4.12'
+    compile 'com.cloudbees:groovy-cps:1.24'
+    compile 'org.jenkins-ci.plugins:script-security:1.24'
+    compile 'org.apache.ivy:ivy:2.4.0'
+    compile 'org.apache.commons:commons-lang3:3.0'
+
+    // ============================================================
+    // Third-party test compile time dependencies
+    // ============================================================
+    testCompile 'junit:junit:4.12'
+    testCompile 'com.lesfurets:jenkins-pipeline-unit:1.1'
+    testCompile 'org.hamcrest:hamcrest-all:1.3'
+    testCompile 'org.spockframework:spock-core:1.2-groovy-2.4'
+    testCompile 'cglib:cglib:3.2.10'
+    testCompile 'org.objenesis:objenesis:3.0.1'
+    testCompile 'org.mockito:mockito-core:2.18.3'
+
+    // ============================================================
+    // Third-party test runtime dependencies
+    // ============================================================
+    testRuntime("org.junit.vintage:junit-vintage-engine:${junitVintageVersion}")
+    testRuntime("org.junit.platform:junit-platform-launcher:${junitPlatformVersion}")
+}
+
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from groovydoc
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task revertOrHotfix {
+    doLast {
+        println "skip build due to revert or hotfix"
+    }
+}
+
+artifacts {
+    archives javadocJar, sourcesJar
+}
+
+test {
+    useJUnitPlatform { }
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat "full"
+    }
+    reports {
+        html.enabled = true
+    }
+}
+
+jacocoTestReport {
+    reports {
+        xml.enabled true
+        csv.enabled false
+        html.destination "${buildDir}/reports/coverage"
+    }
+}
+
+// This is a workaround due to an issue with Ivy
+compileGroovy {
+    // Create temp file.
+    File temp = File.createTempFile("config", ".groovy")
+
+    // Delete temp file when program exits.
+    temp.deleteOnExit()
+
+    // Write to temp file
+    BufferedWriter out = new BufferedWriter(new FileWriter(temp))
+    out.write("""\
+        withConfig(configuration) {
+            configuration.setDisabledGlobalASTTransformations(['groovy.grape.GrabAnnotationTransformation'] as Set)
+        }
+    """.stripIndent())
+    out.close()
+    groovyOptions.configurationScript = temp
+}
